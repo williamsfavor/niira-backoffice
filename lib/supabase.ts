@@ -10,7 +10,7 @@ export async function getDashboardData(): Promise<DashboardData> {
   if (!supabase) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local.");
   const today = new Date(); today.setHours(0, 0, 0, 0);
   const [apps, tickets, centers, faqs, appointments] = await Promise.all([
-    supabase.from("applications").select("application_id,applicant_name,application_type,status,current_stage,last_update").order("last_update", { ascending: false }).limit(20),
+    supabase.from("applications").select("application_id,applicant_name,phone_number,application_type,status,current_stage,last_update").order("last_update", { ascending: false }).limit(20),
     supabase.from("tickets").select("ticket_id,issue_text,status,created_at,phone_number").order("created_at", { ascending: false }),
     supabase.from("centers").select("id,name,district,address,hours,is_active").order("district"),
     supabase.from("faqs").select("id,category,question,answer,priority,view_count,is_active").order("priority"),

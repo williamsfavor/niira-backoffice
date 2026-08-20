@@ -30,11 +30,10 @@ export function Shell({ children }: { children: React.ReactNode }) {
         <div className="workspace-card">
           <header className="topbar">
             <button className="icon-button mobile-menu" onClick={() => setMobileOpen(true)} aria-label="Open navigation"><Menu size={21} /></button>
-            <label className="global-search"><Search size={18} /><input aria-label="Search dashboard" placeholder="Search dashboard" /></label>
+            <form className="global-search" action="/applications"><Search size={18} /><input name="q" aria-label="Search applications" placeholder="Search applications" /></form>
             <div className="topbar-actions">
-              <button className="icon-button notification-button" aria-label="Notifications"><Bell size={19} /><span /></button>
-              <div className="profile-copy"><strong>Tusiime Sam</strong><small>Super admin</small></div>
-              <div className="avatar">TS</div>
+              <a className="icon-button notification-button" href="/tickets" aria-label="Open support tickets"><Bell size={19} /><span /></a>
+              <a className="profile-link" href="/settings" aria-label="Open account settings"><div className="profile-copy"><strong>Tusiime Sam</strong><small>Super admin</small></div><div className="avatar">TS</div></a>
             </div>
           </header>
           <main id="main-content" className="content-scroll"><div className="content-container">{children}</div></main>
