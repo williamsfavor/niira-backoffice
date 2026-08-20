@@ -38,3 +38,10 @@ export async function getDashboardData(): Promise<DashboardData> {
     })) as DashboardData["appointments"]
   };
 }
+
+export async function getRecord(table: string, idColumn: string, id: string) {
+  if (!supabase) throw new Error("Supabase is not configured. Add NEXT_PUBLIC_SUPABASE_URL and NEXT_PUBLIC_SUPABASE_ANON_KEY to .env.local.");
+  const { data, error } = await supabase.from(table).select("*").eq(idColumn, id).maybeSingle();
+  if (error) throw new Error(`Unable to load record from Supabase: ${error.message}`);
+  return data;
+}
