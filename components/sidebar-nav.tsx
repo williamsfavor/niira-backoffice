@@ -4,9 +4,47 @@ import Link from "next/link";
 import { Building2, CalendarDays, CircleHelp, FileSearch, LayoutDashboard, Settings, Ticket } from "lucide-react";
 import { usePathname } from "next/navigation";
 
-const links = [["Dashboard", "/", LayoutDashboard], ["Applications", "/applications", FileSearch], ["Collection centres", "/centers", Building2], ["FAQs & content", "/faqs", CircleHelp], ["Tickets", "/tickets", Ticket], ["Appointments", "/appointments", CalendarDays], ["Settings", "/settings", Settings]] as const;
+const navigation = [
+  {
+    label: "Operations",
+    links: [
+      ["Dashboard", "/", LayoutDashboard],
+      ["Applications", "/applications", FileSearch],
+      ["Collection centres", "/centers", Building2],
+      ["Appointments", "/appointments", CalendarDays],
+      ["Support tickets", "/tickets", Ticket],
+    ],
+  },
+  {
+    label: "Management",
+    links: [
+      ["FAQs & content", "/faqs", CircleHelp],
+      ["Settings", "/settings", Settings],
+    ],
+  },
+] as const;
 
-export function SidebarNav() {
+export function SidebarNav({ collapsed = false, onNavigate }: { collapsed?: boolean; onNavigate?: () => void }) {
   const pathname = usePathname();
-  return <nav>{links.map(([label, href, Icon]) => <Link className={(href === "/" ? pathname === "/" : pathname.startsWith(href)) ? "active" : ""} href={href} key={label}><Icon size={18}/>{label}</Link>)}</nav>;
+  return (
+    <nav className="sidebar-nav" aria-label="Main navigation">
+      {navigation.map((section) => (
+        <div className="nav-section" key={section.label}>
+          {!collapsed && <p>{section.label}</p>}
+          {collapsed && <span className="nav-divider" />}
+          <div>
+            {section.links.map(([label, href, Icon]) => {
+              const active = href === "/" ? pathname === "/" : pathname.startsWith(href);
+              return (
+                <Link className={active ? "active" : ""} href={href} key={label} onClick={onNavigate} title={collapsed ? label : undefined} aria-current={active ? "page" : undefined}>
+                  <Icon size={19} strokeWidth={1.8} />
+                  {!collapsed && <span>{label}</span>}
+                </Link>
+              );
+            })}
+          </div>
+        </div>
+      ))}
+    </nav>
+  );
 }
