@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { Building2, CalendarDays, CircleHelp, FileSearch, LayoutDashboard, Settings, Ticket } from "lucide-react";
+import { BarChart3, Building2, CalendarDays, CircleHelp, FileSearch, LayoutDashboard, Settings, Ticket } from "lucide-react";
 import { usePathname } from "next/navigation";
 
 const navigation = [
@@ -13,6 +13,7 @@ const navigation = [
       ["Collection centres", "/centers", Building2],
       ["Appointments", "/appointments", CalendarDays],
       ["Support tickets", "/tickets", Ticket],
+      ["Reports", "/reports", BarChart3],
     ],
   },
   {
