@@ -8,11 +8,11 @@ const value = (form: FormData, name: string) => String(form.get(name) ?? "").tri
 const checked = (form: FormData, name: string) => form.get(name) === "on";
 function refresh(...paths: string[]) { paths.forEach((path) => revalidatePath(path)); }
 async function audit(action: string, entityType: string, entityId: string, afterData: unknown) { await adminSupabase().from("audit_logs").insert({ actor_type: "admin", actor_admin_id: testAdminId, action, entity_type: entityType, entity_id: entityId, after_data: afterData }); }
-async function processResolutionNotification(ticketId: string) {
+async function processTicketNotifications(ticketId: string) {
   const backendUrl = process.env.NIIRA_BACKEND_URL?.replace(/\/$/, "");
   const secret = process.env.NIIRA_INTERNAL_SECRET;
   if (!backendUrl || !secret) {
-    console.warn(`[NIRA] resolution for ${ticketId} is queued, but NIIRA_BACKEND_URL or NIIRA_INTERNAL_SECRET is missing.`);
+    console.warn(`[NIRA] notification for ${ticketId} is queued, but NIIRA_BACKEND_URL or NIIRA_INTERNAL_SECRET is missing.`);
     return;
   }
   try {
@@ -24,7 +24,7 @@ async function processResolutionNotification(ticketId: string) {
     });
     if (!response.ok) throw new Error(`notification processor returned ${response.status}`);
   } catch (error) {
-    console.error(`[NIRA] resolution for ${ticketId} was saved, but immediate notification processing failed:`, error);
+    console.error(`[NIRA] notification for ${ticketId} was saved, but immediate processing failed:`, error);
   }
 }
 
@@ -57,20 +57,46 @@ export async function claimTicket(form: FormData) {
   const { data, error } = await adminSupabase().from("tickets").update({ assigned_to: testAdminId, status: "InProgress", updated_at: new Date().toISOString() }).eq("ticket_id", ticketId).select().single(); if (error) throw new Error(error.message);
   await audit("assign", "ticket", ticketId, data); refresh("/", "/tickets");
 }
-export async function resolveTicket(form: FormData) {
-  await requireBackofficeUser(); const ticketId = value(form, "ticket_id"), resolutionNote = value(form, "resolution_note");
-  if (!resolutionNote) throw new Error("A resolution note is required before closing a ticket.");
-  const { data, error } = await adminSupabase().from("tickets").update({ status: "Resolved", resolution_note: resolutionNote, resolved_at: new Date().toISOString(), updated_at: new Date().toISOString() }).eq("ticket_id", ticketId).select().single(); if (error) throw new Error(error.message);
-  await audit("resolve", "ticket", ticketId, data); await processResolutionNotification(ticketId); refresh("/", "/tickets");
+export async function changeTicketStatus(form: FormData) {
+  await requireBackofficeUser();
+  const ticketId = value(form, "ticket_id"), status = value(form, "status"), resolutionNote = value(form, "resolution_note");
+  if (!ticketId || !["Open", "InProgress", "Resolved"].includes(status)) throw new Error("Choose a valid ticket status.");
+  if (status === "Resolved" && !resolutionNote) throw new Error("Add a resolution before marking this ticket resolved.");
+  const client = adminSupabase();
+  const { data: before, error: beforeError } = await client.from("tickets").select("*").eq("ticket_id", ticketId).single();
+  if (beforeError) throw new Error(beforeError.message);
+  const update = {
+    status,
+    assigned_to: status === "InProgress" && !before.assigned_to ? testAdminId : before.assigned_to,
+    resolution_note: status === "Resolved" ? resolutionNote : null,
+    resolved_at: status === "Resolved" ? new Date().toISOString() : null,
+    updated_at: new Date().toISOString(),
+  };
+  const { data, error } = await client.from("tickets").update(update).eq("ticket_id", ticketId).select().single();
+  if (error) throw new Error(error.message);
+  await audit("status_change", "ticket", ticketId, { before, after: data });
+  if (status === "Resolved" && before.status !== "Resolved") await processTicketNotifications(ticketId);
+  refresh("/", "/tickets", `/tickets/${ticketId}`);
+}
+export async function sendTicketMessage(form: FormData) {
+  await requireBackofficeUser();
+  const ticketId = value(form, "ticket_id"), message = value(form, "message"), visibility = value(form, "visibility") === "Internal" ? "Internal" : "Citizen";
+  if (!ticketId || !message) throw new Error("Write a message before sending.");
+  if (message.length > 1000) throw new Error("Ticket messages cannot exceed 1,000 characters.");
+  const { data, error } = await adminSupabase().rpc("create_ticket_message", { p_ticket_id: ticketId, p_body: message, p_created_by: testAdminId, p_visibility: visibility });
+  if (error) throw new Error(error.message);
+  await audit(visibility === "Internal" ? "internal_note" : "respond", "ticket", ticketId, data);
+  if (visibility === "Citizen") await processTicketNotifications(ticketId);
+  refresh("/tickets", `/tickets/${ticketId}`);
 }
 export async function retryResolutionNotification(form: FormData) {
   await requireBackofficeUser();
   const ticketId = value(form, "ticket_id");
   if (!ticketId) throw new Error("Ticket reference is required.");
-  const { error } = await adminSupabase().from("notification_outbox").update({ status: "Pending", next_attempt_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString() }).eq("event_type", "ticket_resolved").eq("aggregate_id", ticketId).neq("status", "Sent");
+  const { error } = await adminSupabase().from("notification_outbox").update({ status: "Pending", next_attempt_at: new Date().toISOString(), last_error: null, updated_at: new Date().toISOString() }).in("event_type", ["ticket_resolved", "ticket_response"]).eq("aggregate_id", ticketId).neq("status", "Sent");
   if (error) throw new Error(error.message);
   await audit("retry_notification", "ticket", ticketId, { channel: "whatsapp" });
-  await processResolutionNotification(ticketId);
+  await processTicketNotifications(ticketId);
   refresh("/tickets");
 }
 export async function createAppointmentSlot(form: FormData) {
@@ -108,7 +134,7 @@ export async function createTicket(form: FormData) {
 }
 export async function updateTicket(form: FormData) {
   await requireBackofficeUser(); const ticketId = value(form, "ticket_id"), issue = value(form, "issue_text"), status = value(form, "status"), note = value(form, "resolution_note"); if (!ticketId || !issue || !["Open", "InProgress", "Resolved"].includes(status)) throw new Error("Invalid ticket update."); if (status === "Resolved" && !note) throw new Error("A resolution note is required.");
-  const client = adminSupabase(); const { data: before } = await client.from("tickets").select("*").eq("ticket_id", ticketId).single(); const update = { issue_text: issue, status, resolution_note: note || null, resolved_at: status === "Resolved" ? new Date().toISOString() : null, updated_at: new Date().toISOString() }; const { data, error } = await client.from("tickets").update(update).eq("ticket_id", ticketId).select().single(); if (error) throw new Error(error.message); await audit("update", "ticket", ticketId, { before, after: data }); if (status === "Resolved" && before?.status !== "Resolved") await processResolutionNotification(ticketId); refresh("/", "/tickets");
+  const client = adminSupabase(); const { data: before } = await client.from("tickets").select("*").eq("ticket_id", ticketId).single(); const update = { issue_text: issue, status, resolution_note: note || null, resolved_at: status === "Resolved" ? new Date().toISOString() : null, updated_at: new Date().toISOString() }; const { data, error } = await client.from("tickets").update(update).eq("ticket_id", ticketId).select().single(); if (error) throw new Error(error.message); await audit("update", "ticket", ticketId, { before, after: data }); if (status === "Resolved" && before?.status !== "Resolved") await processTicketNotifications(ticketId); refresh("/", "/tickets");
 }
 export async function deleteTicket(form: FormData) {
   await requireBackofficeUser(); const ticketId = value(form, "ticket_id"), client = adminSupabase(); const { data: before } = await client.from("tickets").select("*").eq("ticket_id", ticketId).single(); const { error } = await client.from("tickets").delete().eq("ticket_id", ticketId); if (error) throw new Error(error.message); await audit("delete", "ticket", ticketId, before); refresh("/", "/tickets");
