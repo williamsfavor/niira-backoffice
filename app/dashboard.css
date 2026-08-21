@@ -370,6 +370,14 @@ td strong { color: var(--na-heading); }
 .queue-body > div { display: flex; align-items: center; gap: 8px; }
 .ticket-link { color: var(--na-brand); font-weight: 600; text-decoration: none; }
 .ticket-link:hover { text-decoration: underline; }
+.notification-state { border-radius: 999px; padding: 4px 8px; background: #f3f4f6; color: #4b5563; font-size: 9px; font-weight: 700; }
+.notification-state.sent { background: #ecfdf5; color: #047857; }
+.notification-state.delivered,
+.notification-state.read { background: #ecfdf5; color: #047857; }
+.notification-state.failed { background: #fef2f2; color: #b91c1c; }
+.notification-state.pending,
+.notification-state.processing { background: #fff7ed; color: #b45309; }
+.slots-panel { margin-top: 18px; }
 .queue-body h3 { margin: 8px 0; color: var(--na-heading); font-size: 12px; }
 .queue-body p { margin: 0; color: var(--na-muted); font-size: 10px; }
 .resolve { margin-top: 11px; }
