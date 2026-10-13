@@ -2,7 +2,7 @@ import "server-only";
 
 import { adminSupabase } from "./admin-supabase";
 
-export type TicketListParams = { q?: string; status?: string; sort?: string; direction?: string; page?: string; size?: string; ticket?: string };
+export type TicketListParams = { q?: string; status?: string; assignment?: string; overdue?: string; sort?: string; direction?: string; page?: string; size?: string; ticket?: string };
 export type TicketRow = {
   ticket_id: string;
   phone_number: string;
@@ -16,6 +16,7 @@ export type TicketRow = {
   resolved_at: string | null;
   assignee: { name: string; email: string } | null;
   notification: { status: string; delivery_status: string | null; attempts: number; last_error: string | null } | null;
+  overdue?: boolean;
 };
 
 export type TicketDetail = TicketRow & {
@@ -36,16 +37,28 @@ export function normalizeTicketParams(params: TicketListParams) {
   const sort = Object.hasOwn(sortFields, params.sort || "") ? params.sort! as keyof typeof sortFields : "created";
   const direction = params.direction === "asc" ? "asc" : "desc";
   const q = (params.q || "").replace(/[^a-zA-Z0-9+\-\s]/g, " ").replace(/\s+/g, " ").trim().slice(0, 60);
-  return { q, status, sort, direction, page, size };
+  const assignment = ["assigned", "unassigned"].includes(params.assignment || "") ? params.assignment! : "all";
+  const overdue = params.overdue === "true" ? "true" : "all";
+  return { q, status, assignment, overdue, sort, direction, page, size };
+}
+
+export function ticketSearchExpression(query: string) {
+  return ["ticket_id", "phone_number", "issue_text"].map((column) => `${column}.ilike.%${query}%`).join(",");
 }
 
 export async function getTickets(params: TicketListParams) {
   const filters = normalizeTicketParams(params);
   const client = adminSupabase();
+  const { data: settings } = await client.from("app_settings").select("ticket_sla_hours").eq("id", "nira-config").maybeSingle();
+  const slaHours = Number(settings?.ticket_sla_hours) || 24;
+  const overdueBefore = new Date(Date.now() - slaHours * 3_600_000).toISOString();
   const fetchPage = (page: number) => {
     let query = client.from("tickets").select("ticket_id,phone_number,application_id,issue_text,status,assigned_to,resolution_note,created_at,updated_at,resolved_at,assignee:admin_users!tickets_assigned_to_fkey(name,email)", { count: "exact" });
     if (filters.status !== "all") query = query.eq("status", filters.status);
-    if (filters.q) query = query.or(`ticket_id.ilike.%${filters.q}%,phone_number.ilike.%${filters.q}%,issue_text.ilike.%${filters.q}%`);
+    if (filters.q) query = query.or(ticketSearchExpression(filters.q));
+    if (filters.assignment === "assigned") query = query.not("assigned_to", "is", null);
+    if (filters.assignment === "unassigned") query = query.is("assigned_to", null);
+    if (filters.overdue === "true") query = query.neq("status", "Resolved").lt("created_at", overdueBefore);
     const from = (page - 1) * filters.size;
     return query.order(sortFields[filters.sort], { ascending: filters.direction === "asc" }).range(from, from + filters.size - 1);
   };
@@ -67,7 +80,7 @@ export async function getTickets(params: TicketListParams) {
   const notificationByTicket = new Map<string, TicketRow["notification"]>();
   for (const notification of notifications.data ?? []) if (!notificationByTicket.has(notification.aggregate_id)) notificationByTicket.set(notification.aggregate_id, notification);
   return {
-    rows: rows.map((ticket) => ({ ...ticket, assignee: firstRelation(ticket.assignee), notification: notificationByTicket.get(ticket.ticket_id) ?? null })) as TicketRow[],
+    rows: rows.map((ticket) => ({ ...ticket, assignee: firstRelation(ticket.assignee), notification: notificationByTicket.get(ticket.ticket_id) ?? null, overdue: ticket.status !== "Resolved" && ticket.created_at < overdueBefore })) as TicketRow[],
     filters,
     total,
     pages,

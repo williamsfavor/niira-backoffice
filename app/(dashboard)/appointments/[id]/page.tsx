@@ -1,3 +1,11 @@
-import { RecordDetail } from "@/components/record-detail";
-import { getRecord } from "@/lib/supabase";
-export default async function AppointmentDetail({ params }: { params: Promise<{ id: string }> }) { const { id } = await params; return <RecordDetail title={`Appointment ${id}`} back="/appointments" record={await getRecord("appointments", "appointment_id", id) as Record<string, unknown> | null}/>; }
+import Link from "next/link";
+import { notFound } from "next/navigation";
+import { EntityDialog } from "@/components/entity-dialog";
+import { ActionForm } from "@/components/action-form";
+import { Status } from "@/components/ui";
+import { updateAppointmentResult } from "@/app/actions/operations";
+import { getAppointmentDetail } from "@/lib/appointments";
+import { requireBackofficeAdmin } from "@/lib/backoffice-auth";
+
+const formatDate = (value: string | null) => value ? new Intl.DateTimeFormat("en-UG", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Kampala" }).format(new Date(value)) : "—";
+export default async function AppointmentDetail({ params }: { params: Promise<{ id: string }> }) { const { id } = await params; const admin = await requireBackofficeAdmin("appointments:read"); const appointment = await getAppointmentDetail(id); if (!appointment) notFound(); const writable = admin.permissions.includes("appointments:write"); return <section className="page detail"><Link className="back-link" href="/appointments">← Back to appointments</Link><div className="detail-title"><div><p className="eyebrow">APPOINTMENT</p><h2>{appointment.appointment_id}</h2></div><div className="row-actions"><Status value={appointment.status}/>{writable && <EntityDialog edit title="Update appointment" trigger="Update status"><ActionForm action={updateAppointmentResult} className="form-grid dialog-form-grid" submitLabel="Save status" pendingLabel="Updating appointment…"><input type="hidden" name="id" value={appointment.id}/><label>Status<select name="status" defaultValue={appointment.status}><option>Confirmed</option><option>Completed</option><option>Cancelled</option></select></label></ActionForm></EntityDialog>}</div></div><article className="detail-grid"><div><small>Citizen</small><p>{appointment.customer_name || "—"}</p></div><div><small>Phone</small><p>{appointment.phone_number}</p></div><div><small>Collection centre</small><p>{appointment.centers ? <Link href={`/centers/${appointment.centers.id}`}>{appointment.centers.name}</Link> : "—"}</p></div><div><small>Service</small><p>{appointment.services?.name || appointment.service_type}</p></div><div><small>Visit time</small><p>{formatDate(appointment.appointment_slots?.starts_at || null)}</p></div><div><small>Slot reference</small><p>{appointment.appointment_slots?.slot_reference || "—"}</p></div><div><small>Source</small><p>{appointment.source}</p></div><div><small>Created</small><p>{formatDate(appointment.created_at)}</p></div></article></section>; }

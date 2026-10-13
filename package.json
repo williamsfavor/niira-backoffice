@@ -5,7 +5,9 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint ."
+    "lint": "eslint .",
+    "test": "vitest run",
+    "test:e2e": "playwright test"
   },
   "repository": {
     "type": "git",
@@ -20,18 +22,32 @@
   "homepage": "https://github.com/williamsfavor/niira-backoffice#readme",
   "description": "",
   "dependencies": {
+    "@headlessui/react": "^2.2.10",
     "@supabase/supabase-js": "^2.112.3",
+    "exceljs": "^4.4.0",
+    "leaflet": "^1.9.4",
     "lucide-react": "^1.33.0",
     "next": "^16.3.1",
+    "pdfkit": "^0.20.2",
     "react": "^19.2.8",
-    "react-dom": "^19.2.8"
+    "react-dom": "^19.2.8",
+    "react-leaflet": "^5.0.0",
+    "recharts": "^3.10.1",
+    "zod": "^4.6.6"
   },
   "devDependencies": {
+    "@playwright/test": "^1.64.0",
+    "@testing-library/jest-dom": "^7.0.1",
+    "@testing-library/react": "^16.3.3",
+    "@types/leaflet": "^1.9.22",
     "@types/node": "^26.2.0",
+    "@types/pdfkit": "^0.17.6",
     "@types/react": "^19.2.18",
     "@types/react-dom": "^19.2.4",
     "eslint": "^9.39.5",
     "eslint-config-next": "^16.3.1",
-    "typescript": "^6.0.3"
+    "jsdom": "^29.1.1",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.4"
   }
 }
