@@ -1,7 +1,13 @@
 import ExcelJS from "exceljs";
 import PDFDocument from "pdfkit";
 import { requireBackofficeAdmin } from "@/lib/backoffice-auth";
-import { getReportExport, reportFieldLabel, reportFilterSummary, type ReportParams, type ReportValue } from "@/lib/report-builder";
+import {
+  getReportExport,
+  reportFieldLabel,
+  reportFilterSummary,
+  type ReportParams,
+  type ReportValue,
+} from "@/lib/report-builder";
 
 export const runtime = "nodejs";
 
@@ -11,13 +17,23 @@ export async function GET(request: Request) {
   const params = Object.fromEntries(url.searchParams.entries()) as ReportParams;
   const format = url.searchParams.get("format") || "csv";
   try {
-    const report = await getReportExport(params, admin.permissions, admin.role !== "super_admin");
+    const report = await getReportExport(
+      params,
+      admin.permissions,
+      admin.role !== "super_admin",
+    );
     const filename = `nira-${report.normalized.dataset.key}-${new Date().toISOString().slice(0, 10)}`;
     if (format === "xlsx") return xlsx(report, filename);
     if (format === "pdf") return pdf(report, filename, admin.name);
     return csv(report, filename);
   } catch (error) {
-    return Response.json({ error: error instanceof Error ? error.message : "Unable to export report." }, { status: 400 });
+    return Response.json(
+      {
+        error:
+          error instanceof Error ? error.message : "Unable to export report.",
+      },
+      { status: 400 },
+    );
   }
 }
 
@@ -29,55 +45,146 @@ function safeText(value: ReportValue) {
 }
 
 function csv(report: ExportReport, filename: string) {
-  const header = report.normalized.columns.map((key) => reportFieldLabel(report.normalized.dataset.key, key));
-  const rows = report.rows.map((row) => report.normalized.columns.map((key) => safeText(row[key])));
-  const body = [header, ...rows].map((row) => row.map((value) => `"${value.replaceAll('"', '""')}"`).join(",")).join("\r\n");
-  return new Response(`\uFEFF${body}`, { headers: { "content-type": "text/csv; charset=utf-8", "content-disposition": `attachment; filename="${filename}.csv"`, "cache-control": "no-store" } });
+  const header = report.normalized.columns.map((key) =>
+    reportFieldLabel(report.normalized.dataset.key, key),
+  );
+  const rows = report.rows.map((row) =>
+    report.normalized.columns.map((key) => safeText(row[key])),
+  );
+  const body = [header, ...rows]
+    .map((row) =>
+      row.map((value) => `"${value.replaceAll('"', '""')}"`).join(","),
+    )
+    .join("\r\n");
+  return new Response(`\uFEFF${body}`, {
+    headers: {
+      "content-type": "text/csv; charset=utf-8",
+      "content-disposition": `attachment; filename="${filename}.csv"`,
+      "cache-control": "no-store",
+    },
+  });
 }
 
 async function xlsx(report: ExportReport, filename: string) {
   const workbook = new ExcelJS.Workbook();
   workbook.creator = "NIRA Back Office";
   const sheet = workbook.addWorksheet(report.normalized.dataset.label);
-  sheet.columns = report.normalized.columns.map((key) => ({ header: reportFieldLabel(report.normalized.dataset.key, key), key, width: 22 }));
-  for (const row of report.rows) sheet.addRow(Object.fromEntries(report.normalized.columns.map((key) => [key, safeText(row[key])])));
+  sheet.columns = report.normalized.columns.map((key) => ({
+    header: reportFieldLabel(report.normalized.dataset.key, key),
+    key,
+    width: 22,
+  }));
+  for (const row of report.rows)
+    sheet.addRow(
+      Object.fromEntries(
+        report.normalized.columns.map((key) => [key, safeText(row[key])]),
+      ),
+    );
   sheet.views = [{ state: "frozen", ySplit: 1 }];
-  sheet.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: report.normalized.columns.length } };
+  sheet.autoFilter = {
+    from: { row: 1, column: 1 },
+    to: { row: 1, column: report.normalized.columns.length },
+  };
   sheet.getRow(1).font = { bold: true, color: { argb: "FFFFFFFF" } };
-  sheet.getRow(1).fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF292560" } };
+  sheet.getRow(1).fill = {
+    type: "pattern",
+    pattern: "solid",
+    fgColor: { argb: "FF292560" },
+  };
   const buffer = await workbook.xlsx.writeBuffer();
-  return new Response(Buffer.from(buffer), { headers: { "content-type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "content-disposition": `attachment; filename="${filename}.xlsx"`, "cache-control": "no-store" } });
+  return new Response(Buffer.from(buffer), {
+    headers: {
+      "content-type":
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+      "content-disposition": `attachment; filename="${filename}.xlsx"`,
+      "cache-control": "no-store",
+    },
+  });
 }
 
-async function pdf(report: ExportReport, filename: string, administrator: string) {
+async function pdf(
+  report: ExportReport,
+  filename: string,
+  administrator: string,
+) {
   const wide = report.normalized.columns.length > 5;
-  const document = new PDFDocument({ margin: 32, layout: wide ? "landscape" : "portrait", size: "A4", bufferPages: true });
+  const document = new PDFDocument({
+    margin: 32,
+    layout: wide ? "landscape" : "portrait",
+    size: "A4",
+    bufferPages: true,
+  });
   const chunks: Buffer[] = [];
   document.on("data", (chunk: Buffer) => chunks.push(chunk));
   const completed = new Promise<void>((resolve) => document.on("end", resolve));
   const title = `${report.normalized.dataset.label} report`;
-  document.fontSize(18).text(title).moveDown(.3);
-  document.fontSize(8).fillColor("#4b5563").text(`Generated by ${administrator} • ${new Intl.DateTimeFormat("en-UG", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Kampala" }).format(new Date())}`);
-  document.text(`Filters: ${reportFilterSummary(report.normalized)}`).moveDown();
-  const pageWidth = document.page.width - document.page.margins.left - document.page.margins.right;
+  document.fontSize(18).text(title).moveDown(0.3);
+  document
+    .fontSize(8)
+    .fillColor("#4b5563")
+    .text(
+      `Generated by ${administrator} • ${new Intl.DateTimeFormat("en-UG", { dateStyle: "medium", timeStyle: "short", timeZone: "Africa/Kampala" }).format(new Date())}`,
+    );
+  document
+    .text(`Filters: ${reportFilterSummary(report.normalized)}`)
+    .moveDown();
+  const pageWidth =
+    document.page.width -
+    document.page.margins.left -
+    document.page.margins.right;
   const cellWidth = pageWidth / report.normalized.columns.length;
   const drawHeader = () => {
     document.font("Helvetica-Bold").fontSize(7).fillColor("#111827");
     const y = document.y;
-    report.normalized.columns.forEach((key, index) => document.text(reportFieldLabel(report.normalized.dataset.key, key), document.page.margins.left + index * cellWidth, y, { width: cellWidth - 5, height: 24 }));
+    report.normalized.columns.forEach((key, index) =>
+      document.text(
+        reportFieldLabel(report.normalized.dataset.key, key),
+        document.page.margins.left + index * cellWidth,
+        y,
+        { width: cellWidth - 5, height: 24 },
+      ),
+    );
     document.y = y + 26;
   };
   drawHeader();
   document.font("Helvetica").fontSize(7);
   for (const row of report.rows) {
-    if (document.y > document.page.height - 55) { document.addPage(); drawHeader(); document.font("Helvetica").fontSize(7); }
+    if (document.y > document.page.height - 55) {
+      document.addPage();
+      drawHeader();
+      document.font("Helvetica").fontSize(7);
+    }
     const y = document.y;
-    report.normalized.columns.forEach((key, index) => document.text(String(row[key] ?? "—"), document.page.margins.left + index * cellWidth, y, { width: cellWidth - 5, height: 30, ellipsis: true }));
+    report.normalized.columns.forEach((key, index) =>
+      document.text(
+        String(row[key] ?? "—"),
+        document.page.margins.left + index * cellWidth,
+        y,
+        { width: cellWidth - 5, height: 30, ellipsis: true },
+      ),
+    );
     document.y = y + 32;
   }
   const range = document.bufferedPageRange();
-  for (let index = range.start; index < range.start + range.count; index += 1) { document.switchToPage(index); document.fontSize(7).fillColor("#6b7280").text(`Page ${index + 1} of ${range.count}`, 0, document.page.height - 24, { align: "center" }); }
+  for (let index = range.start; index < range.start + range.count; index += 1) {
+    document.switchToPage(index);
+    document
+      .fontSize(7)
+      .fillColor("#6b7280")
+      .text(
+        `Page ${index + 1} of ${range.count}`,
+        0,
+        document.page.height - 24,
+        { align: "center" },
+      );
+  }
   document.end();
   await completed;
-  return new Response(Buffer.concat(chunks), { headers: { "content-type": "application/pdf", "content-disposition": `attachment; filename="${filename}.pdf"`, "cache-control": "no-store" } });
+  return new Response(Buffer.concat(chunks), {
+    headers: {
+      "content-type": "application/pdf",
+      "content-disposition": `attachment; filename="${filename}.pdf"`,
+      "cache-control": "no-store",
+    },
+  });
 }

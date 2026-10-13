@@ -28,11 +28,11 @@ describe("shared action forms", () => {
     expect(screen.getByRole("button", { name: "Save" })).toBeEnabled();
   });
 
-  it("marks navigation submissions busy after native validation succeeds", () => {
+  it("marks navigation submissions busy after native validation succeeds", async () => {
     const { container } = render(<form onSubmit={(event) => event.preventDefault()}><input name="q" required defaultValue="Kampala" /><NavigationSubmitButton>Apply</NavigationSubmitButton></form>);
     const button = screen.getByRole("button", { name: "Apply" });
     fireEvent.click(button);
-    expect(container.querySelector('button[aria-busy="true"]')).toBeDisabled();
+    await waitFor(() => expect(container.querySelector('button[aria-busy="true"]')).toBeDisabled());
     expect(screen.getByRole("button", { name: "Applying…" })).toBeVisible();
   });
 

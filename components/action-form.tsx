@@ -16,7 +16,11 @@ export function SubmitButton({ children, pendingLabel = "Saving…", className =
 export function NavigationSubmitButton({ children, pendingLabel = "Applying…", className = "secondary" }: { children: React.ReactNode; pendingLabel?: string; className?: string }) {
   const [pending, setPending] = useState(false);
   return <button className={className} type="submit" disabled={pending} aria-busy={pending} onClick={(event) => {
-    if (event.currentTarget.form?.reportValidity()) setPending(true);
+    if (!event.currentTarget.form?.reportValidity()) return;
+    // A synchronous state update disables the submitter before the browser's
+    // default GET-form action runs, which can cancel navigation entirely.
+    // Defer visual feedback until the native submit has already started.
+    window.setTimeout(() => setPending(true), 0);
   }}>{pending && <LoaderCircle className="button-spinner" size={15} aria-hidden="true" />}{pending ? pendingLabel : children}</button>;
 }
 
